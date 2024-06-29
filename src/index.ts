@@ -54,7 +54,7 @@ app.use(express.json());
 app.use(helmet());
 
 // Set up trust proxy
-app.set('trust proxy', process.env.PROXIES || true);
+app.set('trust proxy', 3);
 app.get('/ip', (request, response) => response.send(request.ip));
 
 // Set up rate limiting
