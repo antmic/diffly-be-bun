@@ -10,18 +10,40 @@ import { config } from 'dotenv';
 config();
 
 const PORT = process.env.PORT || 3000;
-const sql = postgres(process.env.DATABASE_URL as string);
-const dbCountResult = await sql`SELECT COUNT(*) FROM words WHERE winning = true`;
+
+let sql: postgres.Sql | null = null;
+let dbCountResult: postgres.RowList<postgres.Row[]>;
+
+// Lazy connection function
+async function getConnection() {
+	if (!sql) {
+		const connectionString = process.env.DATABASE_URL;
+		if (!connectionString) {
+			throw new Error('DATABASE_URL is not defined');
+		}
+
+		sql = postgres(connectionString, {
+			max: 10,
+			idle_timeout: 30,
+			onnotice: notice => console.warn('Notice:', notice.message),
+		});
+		console.log('Database connection established');
+		dbCountResult = await sql`SELECT COUNT(*) FROM words WHERE winning = true`;
+	}
+	return sql;
+}
 
 console.log('Connected to the database');
 
 const randomWordDB = async (): Promise<string> => {
+	const sql = await getConnection();
 	const randomOffset = Math.floor(Math.random() * dbCountResult[0].count);
 	const result = await sql`SELECT word FROM words WHERE winning = true OFFSET ${randomOffset} LIMIT 1`;
 	return result[0].word;
 };
 
 const checkWordDB = async (word: string): Promise<boolean> => {
+	const sql = await getConnection();
 	const result = await sql`SELECT EXISTS (SELECT 1 FROM words WHERE word = ${word})`;
 	return result[0].exists;
 };
@@ -30,12 +52,20 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(helmet());
-app.use(
-	rateLimit({
-		windowMs: 15 * 60 * 1000,
-		max: 100,
-	})
-);
+
+// Set up trust proxy
+app.set('trust proxy', 1);
+app.get('/ip', (request, response) => response.send(request.ip));
+
+// Set up rate limiting
+const limiter = rateLimit({
+	windowMs: 15 * 60 * 1000, // 15 minutes
+	max: 500, // limit each IP to 500 requests per windowMs
+	standardHeaders: true,
+	legacyHeaders: false,
+});
+
+app.use(limiter);
 
 app.get(
 	'/getword',
@@ -53,7 +83,8 @@ app.post(
 			return; // Just return without a value
 		}
 
-		const word = req.body.word.trim();
+		const removeNonLetters = (str: string) => str.replace(/[^\p{L}]+/gu, '');
+		const word: string = removeNonLetters(req.body.word).toLowerCase();
 		const result: boolean = await checkWordDB(word);
 		res.status(200).json({ message: result });
 		// No need to return anything here
@@ -81,8 +112,10 @@ process.on('SIGTERM', async () => {
 
 		// Close the database connection
 		try {
-			await sql.end();
-			console.log('Database connection closed');
+			if (sql) {
+				await sql.end();
+				console.log('Database connection closed');
+			}
 		} catch (err) {
 			console.error('Error closing database connection:', err);
 		}
