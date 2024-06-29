@@ -54,7 +54,7 @@ app.use(express.json());
 app.use(helmet());
 
 // Set up trust proxy
-app.set('trust proxy', 1);
+app.set('trust proxy', 2);
 app.get('/ip', (request, response) => response.send(request.ip));
 
 // Set up rate limiting
@@ -66,6 +66,10 @@ const limiter = rateLimit({
 });
 
 app.use(limiter);
+
+app.get('/', (req: Request, res: Response) => {
+	res.send('Server is running! Go play the game at https://antmic.github.io/diffly/');
+});
 
 app.get(
 	'/getword',
