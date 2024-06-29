@@ -54,7 +54,6 @@ app.post(
 		}
 
 		const word = req.body.word.trim();
-		console.log(word);
 		const result: boolean = await checkWordDB(word);
 		res.status(200).json({ message: result });
 		// No need to return anything here
