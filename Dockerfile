@@ -6,9 +6,6 @@ WORKDIR /app
 COPY bun.lockb .
 COPY package.json .
 
-ENV DATABASE_URL=postgresql://difflyDB_owner:4rGvLIq2gHiC@ep-dawn-wood-a2mdfn5j.eu-central-1.aws.neon.tech/difflyDB?sslmode=require
-ENV PORT=3000
-
 EXPOSE 3000/tcp
 
 RUN bun install --frozen-lockfile
